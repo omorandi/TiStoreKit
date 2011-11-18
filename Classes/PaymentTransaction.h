@@ -16,4 +16,6 @@
 
 -(id)_initWithPageContext:(id<TiEvaluator>)context transaction:(SKPaymentTransaction*)transaction_;
 
+- (id)state;
+
 @end

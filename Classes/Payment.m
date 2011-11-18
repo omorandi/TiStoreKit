@@ -16,9 +16,10 @@
 
 -(id)_initWithPageContext:(id<TiEvaluator>)context payment:(SKPayment*)payment_
 {
-	if (self = [super _initWithPageContext:context]) {
+    self = [super _initWithPageContext:context];
+	if (self != nil) {
 		self.payment.productIdentifier = payment_.productIdentifier;
-		self.payment.quantity = payment_.quantity;
+		self.payment.quantity = 1;
 	}
 	return self;
 }
@@ -38,7 +39,6 @@
 
 - (void)setProduct:(id)arg
 {
-	ENSURE_STRING_OR_NIL(arg);
 	if ([arg isKindOfClass:[Product class]]) {
 		self.payment.productIdentifier = [(Product*)arg id];
 	}

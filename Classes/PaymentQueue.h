@@ -4,13 +4,21 @@
  * Licensed under the terms of the Apache Public License
  * Please see the LICENSE included with this distribution for details.
  */
-#import "TiProxy.h"
 #import <StoreKit/StoreKit.h>
+#import <TiProxy.h>
+#import "Payment.h"
+#import "PaymentTransaction.h"
 
-@interface PaymentQueue : TiProxy<SKPaymentTransactionObserver> {
+@interface PaymentQueue : NSObject<SKPaymentTransactionObserver> {
 	SKPaymentQueue* queue;
+    TiProxy *moduleProxy;
 }
--(void)addPayment:(id)arg;
 
--(id)_initWithPageContext:(id<TiEvaluator>)context queue:(SKPaymentQueue*)queue_;
+-(id)initWithModuleProxy:(TiProxy*)module;
+
+
+-(void)addPayment:(Payment*)payment;
+-(void)finishTransaction:(PaymentTransaction*)pt;
+-(void)restoreCompletedTransactions;
+
 @end

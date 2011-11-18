@@ -2,7 +2,7 @@
 # this is your module manifest and used by Titanium
 # during compilation, packaging, distribution, etc.
 #
-version: 0.1
+version: 1.0
 description: My module
 author: Your Name
 license: Specify your license
@@ -14,4 +14,4 @@ name: tistorekit
 moduleid: jp.masuidrive.ti.storekit
 guid: b0c990ec-bb25-4627-9994-1f11f5076375
 platform: iphone
-minsdk: 1.4.0
+minsdk: 1.8.0

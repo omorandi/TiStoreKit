@@ -14,7 +14,8 @@
 -(id)_initWithPageContext:(id<TiEvaluator>)context
 			  product:(SKProduct*)product_
 {	
-	if (self = [super _initWithPageContext:context]) {
+    self = [super _initWithPageContext:context];
+	if (self != nil) {
 		product = [product_ retain];
 	}
 	return self;

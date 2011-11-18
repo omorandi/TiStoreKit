@@ -17,7 +17,8 @@
 -(id)_initWithPageContext:(id<TiEvaluator>)context
 			  transaction:(SKPaymentTransaction*)transaction_
 {
-	if (self = [super _initWithPageContext:context]) {
+    self = [super _initWithPageContext:context];
+	if (self != nil) {
 		transaction = [transaction_ retain];
 	}
 	return self;
@@ -31,17 +32,7 @@
 
 - (id)state
 {
-	switch (transaction.transactionState) {
-		case SKPaymentTransactionStatePurchasing:
-			return @"purchasing";
-		case SKPaymentTransactionStatePurchased:
-			return @"purchased";
-		case SKPaymentTransactionStateFailed:
-			return @"failed";
-		case SKPaymentTransactionStateRestored:
-			return @"restored";
-	}
-	return @"Unknown";
+    return [NSNumber numberWithInt:transaction.transactionState];
 }
 
 #define SETOBJ(dict, obj, key) if(obj){[dict setObject:obj forKey:key];};
@@ -90,4 +81,27 @@
 {
 	return [transaction transactionIdentifier];
 }
+
+-(id)toString:(id)args
+{
+    NSString *receipt = @"unavailable";
+    if ([transaction transactionReceipt]) 
+    {
+        receipt = [[NSString alloc] initWithData:[transaction transactionReceipt] encoding:NSUTF8StringEncoding];
+        [receipt autorelease];
+    }
+    
+    NSString *str = @"Transaction: {\n";
+    str = [str stringByAppendingFormat:@"id: %@,\n", [transaction transactionIdentifier]];
+    str = [str stringByAppendingFormat:@"state: %d,\n", [transaction transactionState]];
+    str = [str stringByAppendingFormat:@"receipt: %@,\n", receipt];
+    str = [str stringByAppendingFormat:@"date: %@,\n", [[transaction transactionDate] description]];
+    if ([transaction error]) 
+    {
+        str = [str stringByAppendingFormat:@"error: %@\n", [[transaction error] localizedDescription]];
+    }
+    str = [str stringByAppendingString:@"}"];
+    return str;
+}
+
 @end

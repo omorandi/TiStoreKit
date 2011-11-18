@@ -16,4 +16,10 @@
 
 -(id)_initWithPageContext:(id<TiEvaluator>)context payment:(SKPayment*)payment_;
 
+- (id)product;
+- (void)setProduct:(id)arg;
+- (id)quantity;
+- (void)setQuantity:(id)arg;
+
+
 @end

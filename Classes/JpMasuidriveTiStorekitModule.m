@@ -12,7 +12,8 @@
 #import "Payment.h"
 #import "PaymentTransaction.h"
 #import "Product.h"
-
+#import "ASIHTTPRequest.h"
+#import "SBJSON.h"
 
 @implementation JpMasuidriveTiStorekitModule
 
@@ -38,7 +39,8 @@
 	// you *must* call the superclass
 	[super startup];
 	productRequestCallback = [NSMutableArray array];
-	
+	defaultPaymentQueue = [[PaymentQueue alloc] initWithModuleProxy:self];
+    
 	NSLog(@"[INFO] %@ loaded",self);
 }
 
@@ -59,6 +61,7 @@
 	// release any resources that have been retained by the module
 	[defaultPaymentQueue release];
 	[productRequestCallback release];
+    [eventQueues dealloc];
 	[super dealloc];
 }
 
@@ -71,26 +74,63 @@
 	[super didReceiveMemoryWarning:notification];
 }
 
+
+
+-(NSMutableDictionary*)eventQueues
+{
+    if (eventQueues == nil)
+    {
+        eventQueues = [[NSMutableDictionary alloc] init];
+    }
+    return eventQueues;
+}
+
 #pragma mark Listener Notifications
 
 -(void)_listenerAdded:(NSString *)type count:(int)count
 {
-	if (count == 1 && [type isEqualToString:@"my_event"])
-	{
-		// the first (of potentially many) listener is being added 
-		// for event named 'my_event'
-	}
+    //once a listener is added, if we have events in the queue we fire them immediately
+    NSMutableArray *queue = [[self eventQueues] objectForKey:type];
+    if (queue == nil)
+        return;
+    
+    while ([queue count] > 0)
+    {
+        id obj = [queue objectAtIndex:0];
+        [super fireEvent:type withObject:obj];
+        [queue removeObjectAtIndex:0];
+    }
 }
 
--(void)_listenerRemoved:(NSString *)type count:(int)count
+-(void)queueEvent:(NSString *)type withObject:(id)obj
 {
-	if (count == 0 && [type isEqualToString:@"my_event"])
-	{
-		// the last listener called for event named 'my_event' has
-		// been removed, we can optionally clean up any resources
-		// since no body is listening at this point for that event
-	}
+    NSMutableArray *queue = [[self eventQueues] objectForKey:type];
+    if (queue == nil)
+    {
+        queue = [[[NSMutableArray alloc] init] autorelease];
+        [[self eventQueues] setObject:queue forKey:type];
+    }
+    [queue addObject:obj];
 }
+
+
+-(void)fireEvent:(NSString *)type withObject:(id)obj
+{
+    if (![self _hasListeners:type])
+    {
+        [self queueEvent:type withObject:obj];
+    }
+    else
+    {
+        [super fireEvent:type withObject:obj];
+    }
+}
+
+
+MAKE_SYSTEM_PROP(PURCHASING, SKPaymentTransactionStatePurchasing);
+MAKE_SYSTEM_PROP(PURCHASED, SKPaymentTransactionStatePurchased);
+MAKE_SYSTEM_PROP(FAILED, SKPaymentTransactionStateFailed);
+MAKE_SYSTEM_PROP(RESTORED, SKPaymentTransactionStateRestored);
 
 
 #pragma mark Delegates
@@ -111,7 +151,12 @@
 		for(SKProduct* product in response.products) {
 			[products addObject:[[Product alloc] _initWithPageContext:[self pageContext] product:product]];
 		}
-		[callback call:[NSArray arrayWithObjects:products, response.invalidProductIdentifiers, nil] thisObject:self];
+        
+        NSDictionary *evt = [NSDictionary dictionaryWithObjectsAndKeys:products, @"products", response.invalidProductIdentifiers, @"invalid", nil];
+        [self _fireEventToListener:@"productRequestFinished"
+						withObject:evt
+                        listener:callback 
+						thisObject:nil];
 	}
 }
 
@@ -122,15 +167,6 @@
 	return NUMBOOL([SKPaymentQueue canMakePayments]);
 }
 
--(id)createPayment:(id)args
-{
-	return [[[Payment alloc] _initWithPageContext:[self executionContext] args:args] autorelease];
-}
-
--(id)createPaymentQueue:(id)args
-{
-	return [[[PaymentQueue alloc] _initWithPageContext:[self executionContext] args:args] autorelease];
-}
 
 -(void)findProducts:(id)args
 {
@@ -155,12 +191,97 @@
 	[productRequestCallback addObject:[NSArray arrayWithObjects: req, callback, nil]];
 }
 
--(id)defaultPaymentQueue
+-(void)purchase:(id)args
 {
-	if(defaultPaymentQueue==nil) {
-		defaultPaymentQueue = [[PaymentQueue alloc] _initWithPageContext:[self pageContext] queue:[SKPaymentQueue defaultQueue]];
-	}
-	return defaultPaymentQueue;
+    //args is the product id
+    ENSURE_SINGLE_ARG(args, Product);
+    Payment *payment = [[[Payment alloc] _initWithPageContext:[self executionContext]] autorelease];
+    [payment setProduct:args];
+    [defaultPaymentQueue addPayment:payment];
 }
+
+-(void)finalizeTransaction:(id)args
+{
+    ENSURE_SINGLE_ARG(args, PaymentTransaction);
+    [defaultPaymentQueue finishTransaction:args];
+}
+
+-(void)restoreCompletedTransactions:(id)args
+{
+	[defaultPaymentQueue restoreCompletedTransactions];
+}
+
+-(void)verifyReceipt:(id)args
+{
+    /*
+        receipt[blob]: A receipt returned from the transaction event callback as transaction.receipt.
+        callback[function]: A function to be called when the verification request completes.
+        sandbox[bool, defaults to false]: Whether or not to use Apple's Sandbox verification server.
+        sharedSecret[string, optional]: The shared secret for your app that you creates in iTunesConnect; required for verifying auto-renewable subscriptions.
+     */
+    
+    ENSURE_SINGLE_ARG(args, NSDictionary);
+    
+    id receipt = [args objectForKey:@"receipt"];
+    ENSURE_TYPE(receipt, TiBlob);
+    
+    id callback = [args objectForKey:@"callback"];
+    ENSURE_TYPE(callback, KrollCallback);
+    
+    BOOL sandbox = [TiUtils boolValue:[args objectForKey:@"sandbox"] def:NO];
+    
+    id sharedSecret = [TiUtils stringValue:[args objectForKey:@"sharedSecret"]];
+
+    NSString *storeUrl = [NSString stringWithFormat:@"https://%@.itunes.apple.com/verifyReceipt", (sandbox?@"sandbox":@"buy")];
+    
+    NSURL *url = [NSURL URLWithString:storeUrl];
+    
+    NSString *encodedReceipt = [ASIHTTPRequest base64forData:[receipt data]];
+    
+    NSString *jsonData = @"{";
+    jsonData = [jsonData stringByAppendingFormat:@"\"receipt-data\":\"%@\"", encodedReceipt];
+    if (sharedSecret != nil) 
+    {
+        jsonData = [jsonData stringByAppendingFormat:@",\"password\":\"%@\"", sharedSecret];
+    }
+    jsonData = [jsonData stringByAppendingString:@"}"];
+    
+    __block ASIHTTPRequest *request = [ASIHTTPRequest requestWithURL:url];
+    [request appendPostData:[jsonData dataUsingEncoding:NSUTF8StringEncoding]];
+    [request setRequestMethod:@"POST"];
+    
+    [request setCompletionBlock:^{
+        // Use when fetching text data
+        NSString *responseString = [request responseString];
+        //NSLog(@"[INFO] Receipt verify received response: %@", responseString);
+        NSDictionary *evt = nil;
+        if ([request responseStatusCode] == 200) {
+            SBJSON *json = [[[SBJSON alloc] init] autorelease];
+            id jsonObject = [json fragmentWithString:responseString error:nil];        
+            evt = [NSDictionary dictionaryWithObjectsAndKeys:jsonObject, @"result", [NSNumber numberWithInt:YES], @"success", nil];
+        }
+        else
+        {
+            evt = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithInt:NO], @"success", [request responseStatusMessage], @"error", nil];
+        }
+        [self _fireEventToListener:@"verificationComplete"
+						withObject:evt
+                          listener:callback 
+						thisObject:nil];
+    }];
+    [request setFailedBlock:^{
+        NSError *error = [request error];
+        //NSLog(@"[ERROR] Receipt verify error: %@", error);
+        NSDictionary *evt = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithInt:NO], @"success", error, @"error", nil];
+        [self _fireEventToListener:@"verificationComplete"
+						withObject:evt
+                          listener:callback 
+						thisObject:nil];
+        
+    }];
+    [request startAsynchronous];
+
+}
+
 
 @end

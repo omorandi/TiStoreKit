@@ -3,3 +3,5 @@ bin
 build
 *.zip
 .DS_Store
+tistorekit.xcodeproj/project.xcworkspace/
+tistorekit.xcodeproj/xcuserdata/

@@ -15,12 +15,13 @@
 
 @implementation PaymentQueue
 
--(id)_initWithPageContext:(id<TiEvaluator>)context
-				    queue:(SKPaymentQueue*)queue_
+-(id)initWithModuleProxy:(TiProxy*)module
 {
-	if (self = [super _initWithPageContext:context]) {
-		queue = [queue_ retain];
+    self = [super init];
+	if (self != nil) {
+		queue = [SKPaymentQueue defaultQueue];
 		[queue addTransactionObserver:self];
+        moduleProxy = module;
 	}
 	return self;
 }
@@ -32,56 +33,29 @@
 	[super dealloc];
 }
 
-- (SKPaymentQueue*)queue
-{
-	if(queue==nil) {
-		queue = [[[SKPaymentQueue alloc] init] autorelease];
-		[queue addTransactionObserver:self];
-	}
-	return [[queue retain] autorelease];
-}
 
-- (void)paymentQueue:(SKPaymentQueue *)queue updatedTransactions:(NSArray *)transactions
+- (void)paymentQueue:(SKPaymentQueue *)q updatedTransactions:(NSArray *)transactions
 {
 	for (SKPaymentTransaction *transaction in transactions) {
-		PaymentTransaction* t = [[[PaymentTransaction alloc] _initWithPageContext:[self pageContext] transaction:transaction] autorelease];
-		NSDictionary* evt = [NSDictionary dictionaryWithObject:t forKey:@"transaction"];
+		PaymentTransaction* t = [[[PaymentTransaction alloc] _initWithPageContext:[moduleProxy pageContext] transaction:transaction] autorelease];
+		NSDictionary* evt = [NSDictionary dictionaryWithObjectsAndKeys:t, @"transaction", [t state], @"state", nil];
 		
-		switch (transaction.transactionState) {
-			case SKPaymentTransactionStatePurchasing:
-				[self fireEvent:@"purchasing" withObject:evt];
-				break;
-				
-			case SKPaymentTransactionStatePurchased:
-				[self fireEvent:@"purchased" withObject:evt];
-				[[self queue] finishTransaction:transaction];
-				break;
-				
-			case SKPaymentTransactionStateFailed:
-				[self fireEvent:@"failed" withObject:evt];
-				[[self queue] finishTransaction:transaction];
-				break;
-				
-			case SKPaymentTransactionStateRestored:
-				[self fireEvent:@"restored" withObject:evt];
-				[[self queue] finishTransaction:transaction];
-				break;
-		}
-	}
+        [moduleProxy fireEvent:@"transaction" withObject:evt];
+    }
 }
 
 - (void)paymentQueue:(SKPaymentQueue *)queue
  removedTransactions:(NSArray *)transactions
 {
 	for (SKPaymentTransaction *transaction in transactions) {
-		PaymentTransaction* t = [[[PaymentTransaction alloc] _initWithPageContext:[self pageContext] transaction:transaction] autorelease];
-		[self fireEvent:@"removed" withObject:[NSDictionary dictionaryWithObject:t forKey:@"transaction"]];
+		PaymentTransaction* t = [[[PaymentTransaction alloc] _initWithPageContext:[moduleProxy pageContext] transaction:transaction] autorelease];
+		[moduleProxy fireEvent:@"removed" withObject:[NSDictionary dictionaryWithObject:t forKey:@"transaction"]];
 	}
 }
 
 - (void)paymentQueueRestoreCompletedTransactionsFinished:(SKPaymentQueue *)queue
 {
-	[self fireEvent:@"restoreFinished" withObject:nil];
+	[moduleProxy fireEvent:@"restoreFinished" withObject:nil];
 }
 
 #define SETOBJ(dict, obj, key) if(obj){[dict setObject:obj forKey:key];};
@@ -97,29 +71,25 @@
 	SETOBJ(ret, error.localizedRecoveryOptions, @"localizedRecoveryOptions");
 	SETOBJ(ret, error.localizedRecoverySuggestion, @"localizedRecoverySuggestion");
 	
-	[self fireEvent:@"restoreFailed" withObject:[NSDictionary dictionaryWithObjectsAndKeys:ret, @"error", nil]];
+	[moduleProxy fireEvent:@"restoreFailed" withObject:[NSDictionary dictionaryWithObjectsAndKeys:ret, @"error", nil]];
 }
 
 
 #pragma Public API
 
--(void)addPayment:(id)arg
+-(void)addPayment:(Payment*)payment
 {
-	ENSURE_SINGLE_ARG_OR_NIL(arg, Payment);
-	Payment* payment = (Payment*)arg;
-	[[self queue] addPayment:payment.payment];
+	[queue addPayment:payment.payment];
 }
 
--(void)finishTransaction:(id)arg
+-(void)finishTransaction:(PaymentTransaction*) pt
 {
-	ENSURE_SINGLE_ARG_OR_NIL(arg, PaymentTransaction);
-	PaymentTransaction* pt = arg;
-	[[self queue] finishTransaction:pt.transaction];
+	[queue finishTransaction:pt.transaction];
 }
 
--(void)restoreCompletedTransactions:(id)arg
+-(void)restoreCompletedTransactions
 {
-	[[self queue] restoreCompletedTransactions];
+	[queue restoreCompletedTransactions];
 }
 
 @end

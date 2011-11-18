@@ -11,6 +11,7 @@
 {
 @private
 	PaymentQueue* defaultPaymentQueue;
+    NSMutableDictionary *eventQueues;
 	NSMutableArray* productRequestCallback;
 }
 

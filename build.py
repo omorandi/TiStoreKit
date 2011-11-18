@@ -164,9 +164,6 @@ def package_module(manifest,mf,config):
 	zf.write(mf,'%s/manifest' % modulepath)
 	libname = 'lib%s.a' % moduleid
 	zf.write('build/%s' % libname, '%s/%s' % (modulepath,libname))
-	html = generate_doc(config)
-	if html!=None:
-		zf.writestr('%s/documentation/index.html'%modulepath,html)
 	for dn in ('assets','example'):
 	  if os.path.exists(dn):
 		  zip_dir(zf,dn,'%s/%s' % (modulepath,dn),['README'])
