@@ -38,8 +38,17 @@
 {
 	for (SKPaymentTransaction *transaction in transactions) {
 		PaymentTransaction* t = [[[PaymentTransaction alloc] _initWithPageContext:[moduleProxy pageContext] transaction:transaction] autorelease];
-		NSDictionary* evt = [NSDictionary dictionaryWithObjectsAndKeys:t, @"transaction", [t state], @"state", nil];
+        
+		NSMutableDictionary* evt = [NSMutableDictionary dictionaryWithObjectsAndKeys:t, @"transaction", [t state], @"state", nil];
 		
+        if (t.transaction.transactionState == SKPaymentTransactionStateFailed) 
+        {
+            if (t.transaction.error.code == SKErrorPaymentCancelled)
+            {
+                [evt setObject:[NSNumber numberWithBool:YES] forKey:@"cancelled"];
+            }
+        }
+        
         [moduleProxy fireEvent:@"transaction" withObject:evt];
     }
 }
@@ -70,8 +79,11 @@
 	SETOBJ(ret, error.localizedFailureReason, @"localizedFailureReason");
 	SETOBJ(ret, error.localizedRecoveryOptions, @"localizedRecoveryOptions");
 	SETOBJ(ret, error.localizedRecoverySuggestion, @"localizedRecoverySuggestion");
-	
-	[moduleProxy fireEvent:@"restoreFailed" withObject:[NSDictionary dictionaryWithObjectsAndKeys:ret, @"error", nil]];
+	if (error.code == SKErrorPaymentCancelled)
+    {
+        SETOBJ(ret, [NSNumber numberWithBool:YES], @"cancelled");
+    }
+	[moduleProxy fireEvent:@"restoreFinished" withObject:[NSDictionary dictionaryWithObjectsAndKeys:ret, @"error", nil]];
 }
 
 

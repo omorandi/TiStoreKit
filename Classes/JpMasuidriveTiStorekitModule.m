@@ -1,4 +1,4 @@
-/**
+    /**
  * Your Copyright Here
  *
  * Appcelerator Titanium is Copyright (c) 2009-2010 by Appcelerator, Inc.
@@ -110,6 +110,12 @@
         queue = [[[NSMutableArray alloc] init] autorelease];
         [[self eventQueues] setObject:queue forKey:type];
     }
+    
+    if (obj == nil)
+    {
+        obj = [NSNull null];
+    }
+    
     [queue addObject:obj];
 }
 
@@ -180,7 +186,7 @@ MAKE_SYSTEM_PROP(RESTORED, SKPaymentTransactionStateRestored);
 		productIds = [NSSet setWithArray:arg0];
 	}
 	else {
-		[self throwException:TiExceptionInvalidType subreason:[NSString stringWithFormat:@"expected: Array or Stinrg, was: %@",[arg0 class]] location:CODELOCATION]; \
+		[self throwException:TiExceptionInvalidType subreason:[NSString stringWithFormat:@"expected: Array or String, was: %@",[arg0 class]] location:CODELOCATION]; \
 	}
 	
 	id callback = [args objectAtIndex:1];
@@ -223,7 +229,20 @@ MAKE_SYSTEM_PROP(RESTORED, SKPaymentTransactionStateRestored);
     ENSURE_SINGLE_ARG(args, NSDictionary);
     
     id receipt = [args objectForKey:@"receipt"];
-    ENSURE_TYPE(receipt, TiBlob);
+
+    NSString *encodedReceipt = nil;
+    
+    if ([receipt isKindOfClass:[TiBlob class]])
+    {
+        encodedReceipt = [ASIHTTPRequest base64forData:[receipt data]];
+    }
+    else if ([receipt isKindOfClass:[NSString class]])
+    {
+        encodedReceipt = [ASIHTTPRequest base64forData:[receipt dataUsingEncoding:NSUTF8StringEncoding]];
+    }
+    else {
+        [self throwException:TiExceptionInvalidType subreason:[NSString stringWithFormat:@"expected: Blob or String, was: %@",[receipt class]] location:CODELOCATION]; \
+    }
     
     id callback = [args objectForKey:@"callback"];
     ENSURE_TYPE(callback, KrollCallback);
@@ -235,8 +254,6 @@ MAKE_SYSTEM_PROP(RESTORED, SKPaymentTransactionStateRestored);
     NSString *storeUrl = [NSString stringWithFormat:@"https://%@.itunes.apple.com/verifyReceipt", (sandbox?@"sandbox":@"buy")];
     
     NSURL *url = [NSURL URLWithString:storeUrl];
-    
-    NSString *encodedReceipt = [ASIHTTPRequest base64forData:[receipt data]];
     
     NSString *jsonData = @"{";
     jsonData = [jsonData stringByAppendingFormat:@"\"receipt-data\":\"%@\"", encodedReceipt];

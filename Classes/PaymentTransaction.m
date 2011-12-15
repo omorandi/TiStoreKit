@@ -10,6 +10,8 @@
 
 #import "TiBlob.h"
 #import "TiUtils.h"
+#import "ASIHTTPRequest.h"
+
 
 @implementation PaymentTransaction
 @synthesize transaction;
@@ -29,6 +31,30 @@
 	RELEASE_TO_NIL(transaction);
 	[super dealloc];
 }
+
+-(id)toString:(id)args
+{
+    NSString *receipt = @"unavailable";
+    if ([transaction transactionReceipt]) 
+    {
+        receipt = [[NSString alloc] initWithData:[transaction transactionReceipt] encoding:NSUTF8StringEncoding];
+        [receipt autorelease];
+    }
+    
+    NSString *str = @"Transaction: {\n";
+    str = [str stringByAppendingFormat:@"id: %@,\n", [transaction transactionIdentifier]];
+    str = [str stringByAppendingFormat:@"state: %d,\n", [transaction transactionState]];
+    str = [str stringByAppendingFormat:@"receipt: %@,\n", receipt];
+    str = [str stringByAppendingFormat:@"date: %@,\n", [[transaction transactionDate] description]];
+    if ([transaction error]) 
+    {
+        str = [str stringByAppendingFormat:@"error: %@\n", [[transaction error] localizedDescription]];
+    }
+    str = [str stringByAppendingString:@"}"];
+    return str;
+}
+
+
 
 - (id)state
 {
@@ -59,7 +85,8 @@
 
 -(id)originalTransaction
 {
-	return [[[PaymentTransaction alloc] _initWithPageContext:[self pageContext] transaction:transaction.originalTransaction] autorelease];
+	PaymentTransaction *original = [[[PaymentTransaction alloc] _initWithPageContext:[self pageContext] transaction:transaction.originalTransaction] autorelease];
+    return original;
 }
 
 -(id)payment
@@ -72,6 +99,12 @@
 	return [[[TiBlob alloc] initWithData:[transaction transactionReceipt] mimetype:@"application/octet-stream"] autorelease];
 }
 
+-(NSString*)receiptBase64
+{
+    return [ASIHTTPRequest base64forData:[transaction transactionReceipt]];
+}
+
+
 -(id)date
 {
 	return [transaction transactionDate];
@@ -82,26 +115,5 @@
 	return [transaction transactionIdentifier];
 }
 
--(id)toString:(id)args
-{
-    NSString *receipt = @"unavailable";
-    if ([transaction transactionReceipt]) 
-    {
-        receipt = [[NSString alloc] initWithData:[transaction transactionReceipt] encoding:NSUTF8StringEncoding];
-        [receipt autorelease];
-    }
-    
-    NSString *str = @"Transaction: {\n";
-    str = [str stringByAppendingFormat:@"id: %@,\n", [transaction transactionIdentifier]];
-    str = [str stringByAppendingFormat:@"state: %d,\n", [transaction transactionState]];
-    str = [str stringByAppendingFormat:@"receipt: %@,\n", receipt];
-    str = [str stringByAppendingFormat:@"date: %@,\n", [[transaction transactionDate] description]];
-    if ([transaction error]) 
-    {
-        str = [str stringByAppendingFormat:@"error: %@\n", [[transaction error] localizedDescription]];
-    }
-    str = [str stringByAppendingString:@"}"];
-    return str;
-}
 
 @end
